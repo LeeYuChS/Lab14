@@ -1,0 +1,5 @@
+data*
+lung_dataset*
+checkpoints*
+__pycache__*
+*.json
