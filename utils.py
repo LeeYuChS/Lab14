@@ -45,6 +45,18 @@ def create_model(model, num_classes):
         model = vit_large_patch32_224_in21k(num_classes, has_logits=False)
     elif model == "vit_huge_patch14_224":
         model = vit_huge_patch14_224_in21k(num_classes, has_logits=False)
+    
+    # elif model == "vit_base_patch16_224_pretrained":
+    #     model == vit_base_patch16_224_in21k(num_classes, has_logits=False)
+    # elif model == "vit_base_patch32_224_pretrained":
+    #     model = vit_base_patch32_224_in21k(num_classes, has_logits=False)
+    # elif model == "vit_large_patch16_224_pretrained":
+    #     model = vit_large_patch16_224_in21k(num_classes, has_logits=False)
+    # elif model == "vit_large_patch32_224_pretrained":
+    #     model = vit_large_patch32_224_in21k(num_classes, has_logits=False)
+    # elif model == "vit_huge_patch14_224_pretrained":
+    #     model = vit_huge_patch14_224_in21k(num_classes, has_logits=False)
+
     else:
         raise Exception("Can't find any model name call {}".format(model))
 
@@ -69,20 +81,34 @@ def plot_history(history, model_name):
     epochs = range(1, len(history['train_loss']) + 1)
     plt.figure(figsize=(12,5))
 
-    plt.subplot(1,2,1)
+    plt.subplot(1,3,1)
     plt.plot(epochs, history['train_loss'], label='Train Loss')
     plt.plot(epochs, history['valid_loss'], label='Valid Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
-
-    plt.subplot(1,2,2)
+###########################################################################
+    plt.subplot(1,3,2)
     plt.plot(epochs, history['train_acc'], label='Train Acc')
     plt.plot(epochs, history['valid_acc'], label='Valid Acc')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
     plt.legend()
-
+###########################################################################
+    plt.subplot(1,3,3)
+    plt.plot(epochs, history['valid_precision'], label='Valid Precision')
+    plt.plot(epochs, history['valid_recall'], label='Valid Recall')
+    plt.xlabel('Epoch')
+    plt.ylabel('Precision or Recall')
+    plt.legend()
+###########################################################################
+    # plt.subplot(1,4,2)
+    # plt.plot(epochs, history['train_acc'], label='Train Acc')
+    # plt.plot(epochs, history['valid_acc'], label='Valid Acc')
+    # plt.xlabel('Epoch')
+    # plt.ylabel('Accuracy')
+    # plt.legend()
+###########################################################################
     plt.tight_layout()
     plt.savefig(os.path.join(config.save_path, f"{model_name}.jpg"))
     plt.close()

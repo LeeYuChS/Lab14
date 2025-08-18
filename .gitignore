@@ -1,5 +1,5 @@
 data*
-lung_dataset*
+*dataset
 checkpoints*
 __pycache__*
 *.json

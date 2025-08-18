@@ -8,7 +8,7 @@ class Config():
     root_path = os.getcwd()
 
     training_batch_size = 32
-    training_epoch = 5
+    training_epoch = 64
     training_LR = 0.0001
 
     @staticmethod
@@ -16,16 +16,20 @@ class Config():
         return torch.optim.Adam(model.parameters(), lr=config.training_LR)
     training_loss = nn.CrossEntropyLoss()
 
-    vit_base_patch16 = "vit_base_patch16_224"
+    vit_base_patch16 = "vit_base_patch16_224"    
     vit_base_patch32 = "vit_base_patch32_224"
-    model_list = [vit_base_patch16, vit_base_patch32]
+    vit_large_patch16 = "vit_large_patch16_224"    
+    vit_large_patch32 = "vit_large_patch32_224"
+    model_list = [vit_base_patch16, vit_base_patch32, vit_large_patch16, vit_large_patch32]
     # model = "vit_large_patch16_224"
     
     # model = "vit_large_patch32_224"
     # model = "vit_huge_patch14_224"
 
+    dataset_type = "stroke"
     num_classes = 3
-    image_path = os.path.join(root_path, "lung_dataset/training_set")
+    # stroke_dataset
+    image_path = os.path.join(root_path, "stroke_dataset")
     # valid_image_path = 
     image_size = 224
     save_path = os.path.join(os.getcwd(), 'checkpoints', datetime.now().strftime("%y%m%d%H%M"))

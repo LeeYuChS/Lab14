@@ -6,6 +6,19 @@ from torchvision.transforms import transforms
 from functools import partial
 from collections import OrderedDict
 
+def load_weights_except_head(model, state_dict, load_head=False):
+    # head key
+    head_keys = ['head.weight', 'head.bias']
+    if hasattr(model, 'head_dist') and model.head_dist is not None:
+        head_keys += ['head_dist.weight', 'head_dist.bias']
+    if not load_head:
+        # remove head weights
+        for k in head_keys:
+            if k in state_dict:
+                state_dict.pop(k)
+    # load weights except classify head
+    model.load_state_dict(state_dict, strict=False)
+
 def drop_path(x, drop_prob: float = 0., training: bool = False):
     """
     Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
@@ -284,30 +297,31 @@ def _init_vit_weights(m):
         nn.init.ones_(m.weight)
  
  
-def vit_base_patch16_224(num_classes: int = 1000):
-    """
-    ViT-Base model (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
-    ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-    weights ported from official Google JAX impl:
-    链接: https://pan.baidu.com/s/1zqb08naP0RPqqfSXfkB2EA  密码: eu9f
-    """
-    model = VisionTransformer(img_size=224,
-                              patch_size=16,
-                              embed_dim=768,
-                              depth=12,
-                              num_heads=12,
-                              representation_size=None,
-                              num_classes=num_classes)
-    return model
+# def vit_base_patch16_224(num_classes: int = 1000):
+#     """
+#     ViT-Base model (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
+#     ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
+#     weights ported from official Google JAX impl:
+#     链接: https://pan.baidu.com/s/1zqb08naP0RPqqfSXfkB2EA  密码: eu9f
+#     """
+#     model = VisionTransformer(img_size=224,
+#                               patch_size=16,
+#                               embed_dim=768,
+#                               depth=12,
+#                               num_heads=12,
+#                               representation_size=None,
+#                               num_classes=num_classes,)
+#     return model
  
- 
-def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True):
+from torch.hub import load_state_dict_from_url
+def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True):
     """
     ViT-Base model (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     weights ported from official Google JAX impl:
     https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_patch16_224_in21k-e5005f0a.pth
     """
+    
     model = VisionTransformer(img_size=224,
                               patch_size=16,
                               embed_dim=768,
@@ -315,27 +329,39 @@ def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True
                               num_heads=12,
                               representation_size=768 if has_logits else None,
                               num_classes=num_classes)
-    return model
+    if pretrained:
+        url = "https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_patch16_224_in21k-e5005f0a.pth"
+        if url:
+            state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
+        else:
+            raise ValueError(f'Pretrained model for vit_base_patch16_224_in21k has not yet been released')
+        # model.load_state_dict(state_dict, strict=False)
+        load_weights_except_head(model, state_dict)
+        print(f"---------------- Loaded pre-trained weights ----------------")
+        return model
+    else:
+        print(f"---------------- No pre-trained weights ----------------")
+        return model
  
  
-def vit_base_patch32_224(num_classes: int = 1000):
-    """
-    ViT-Base model (ViT-B/32) from original paper (https://arxiv.org/abs/2010.11929).
-    ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-    weights ported from official Google JAX impl:
-    链接: https://pan.baidu.com/s/1hCv0U8pQomwAtHBYc4hmZg  密码: s5hl
-    """
-    model = VisionTransformer(img_size=224,
-                              patch_size=32,
-                              embed_dim=768,
-                              depth=12,
-                              num_heads=12,
-                              representation_size=None,
-                              num_classes=num_classes)
-    return model
+# def vit_base_patch32_224(num_classes: int = 1000):
+#     """
+#     ViT-Base model (ViT-B/32) from original paper (https://arxiv.org/abs/2010.11929).
+#     ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
+#     weights ported from official Google JAX impl:
+#     链接: https://pan.baidu.com/s/1hCv0U8pQomwAtHBYc4hmZg  密码: s5hl
+#     """
+#     model = VisionTransformer(img_size=224,
+#                               patch_size=32,
+#                               embed_dim=768,
+#                               depth=12,
+#                               num_heads=12,
+#                               representation_size=None,
+#                               num_classes=num_classes)
+#     return model
  
  
-def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True):
+def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True):
     """
     ViT-Base model (ViT-B/32) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
@@ -349,27 +375,38 @@ def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True
                               num_heads=12,
                               representation_size=768 if has_logits else None,
                               num_classes=num_classes)
-    return model
+    if pretrained:
+        url = "https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_patch32_224_in21k-8db57226.pth"
+        if url:
+            state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
+        else:
+            raise ValueError(f'Pretrained model for vit_base_patch32_224_in21k has not yet been released')
+        load_weights_except_head(model, state_dict)
+        print(f"---------------- Loaded pre-trained weights ----------------")
+        return model
+    else:
+        print(f"---------------- No pre-trained weights ----------------")
+        return model
  
  
-def vit_large_patch16_224(num_classes: int = 1000):
-    """
-    ViT-Large model (ViT-L/16) from original paper (https://arxiv.org/abs/2010.11929).
-    ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-    weights ported from official Google JAX impl:
-    链接: https://pan.baidu.com/s/1cxBgZJJ6qUWPSBNcE4TdRQ  密码: qqt8
-    """
-    model = VisionTransformer(img_size=224,
-                              patch_size=16,
-                              embed_dim=1024,
-                              depth=24,
-                              num_heads=16,
-                              representation_size=None,
-                              num_classes=num_classes)
-    return model
+# def vit_large_patch16_224(num_classes: int = 1000):
+#     """
+#     ViT-Large model (ViT-L/16) from original paper (https://arxiv.org/abs/2010.11929).
+#     ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
+#     weights ported from official Google JAX impl:
+#     链接: https://pan.baidu.com/s/1cxBgZJJ6qUWPSBNcE4TdRQ  密码: qqt8
+#     """
+#     model = VisionTransformer(img_size=224,
+#                               patch_size=16,
+#                               embed_dim=1024,
+#                               depth=24,
+#                               num_heads=16,
+#                               representation_size=None,
+#                               num_classes=num_classes)
+#     return model
  
  
-def vit_large_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True):
+def vit_large_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True):
     """
     ViT-Large model (ViT-L/16) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
@@ -383,10 +420,21 @@ def vit_large_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = Tru
                               num_heads=16,
                               representation_size=1024 if has_logits else None,
                               num_classes=num_classes)
-    return model
+    if pretrained:
+        url = "https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch16_224_in21k-606da67d.pth"
+        if url:
+            state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
+        else:
+            raise ValueError(f'Pretrained model for vit_large_patch16_224_in21k has not yet been released')
+        load_weights_except_head(model, state_dict)
+        print(f"---------------- Loaded pre-trained weights ----------------")
+        return model
+    else:
+        print(f"---------------- No pre-trained weights ----------------")
+        return model
  
  
-def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True):
+def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True):
     """
     ViT-Large model (ViT-L/32) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
@@ -400,9 +448,20 @@ def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = Tru
                               num_heads=16,
                               representation_size=1024 if has_logits else None,
                               num_classes=num_classes)
-    return model
+    if pretrained:
+        url = "https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch32_224_in21k-9046d2e7.pth"
+        if url:
+            state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
+        else:
+            raise ValueError(f'Pretrained model for vit_large_patch32_224_in21k has not yet been released')
+        load_weights_except_head(model, state_dict)
+        print(f"---------------- Loaded pre-trained weights ----------------")
+        return model
+    else:
+        print(f"---------------- No pre-trained weights ----------------")
+        return model
  
- 
+"""先不考慮"""
 def vit_huge_patch14_224_in21k(num_classes: int = 21843, has_logits: bool = True):
     """
     ViT-Huge model (ViT-H/14) from original paper (https://arxiv.org/abs/2010.11929).
@@ -417,3 +476,55 @@ def vit_huge_patch14_224_in21k(num_classes: int = 21843, has_logits: bool = True
                               representation_size=1280 if has_logits else None,
                               num_classes=num_classes)
     return model
+
+
+# PRETRAINED_MODELS = {
+#     'B_16': {
+#       'config': get_b16_config(),
+#       'num_classes': 21843,
+#       'image_size': (224, 224),
+#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/B_16.pth"
+#     },
+#     'B_32': {
+#       'config': get_b32_config(),
+#       'num_classes': 21843,
+#       'image_size': (224, 224),
+#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/B_32.pth"
+#     },
+#     'L_16': {
+#       'config': get_l16_config(),
+#       'num_classes': 21843,
+#       'image_size': (224, 224),
+#       'url': None
+#     },
+#     'L_32': {
+#       'config': get_l32_config(),
+#       'num_classes': 21843,
+#       'image_size': (224, 224),
+#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/L_32.pth"
+#     },
+#     'B_16_imagenet1k': {
+#       'config': drop_head_variant(get_b16_config()),
+#       'num_classes': 1000,
+#       'image_size': (384, 384),
+#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/B_16_imagenet1k.pth"
+#     },
+#     'B_32_imagenet1k': {
+#       'config': drop_head_variant(get_b32_config()),
+#       'num_classes': 1000,
+#       'image_size': (384, 384),
+#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/B_32_imagenet1k.pth"
+#     },
+#     'L_16_imagenet1k': {
+#       'config': drop_head_variant(get_l16_config()),
+#       'num_classes': 1000,
+#       'image_size': (384, 384),
+#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/L_16_imagenet1k.pth"
+#     },
+#     'L_32_imagenet1k': {
+#       'config': drop_head_variant(get_l32_config()),
+#       'num_classes': 1000,
+#       'image_size': (384, 384),
+#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/L_32_imagenet1k.pth"
+#     },
+# }

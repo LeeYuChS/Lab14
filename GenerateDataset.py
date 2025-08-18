@@ -1,8 +1,6 @@
-import torch
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import StratifiedShuffleSplit
-import os
 from utils import set_seed
 from Config import config
 
