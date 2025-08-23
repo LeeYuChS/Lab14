@@ -314,7 +314,7 @@ def _init_vit_weights(m):
 #     return model
  
 from torch.hub import load_state_dict_from_url
-def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True):
+def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None):
     """
     ViT-Base model (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
@@ -329,7 +329,7 @@ def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True
                               num_heads=12,
                               representation_size=768 if has_logits else None,
                               num_classes=num_classes)
-    if pretrained:
+    if pretrained==True and continue_weights==None:
         url = "https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_patch16_224_in21k-e5005f0a.pth"
         if url:
             state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
@@ -339,9 +339,15 @@ def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True
         load_weights_except_head(model, state_dict)
         print(f"---------------- Loaded pre-trained weights ----------------")
         return model
+    elif continue_weights!=None:
+        print(f"---------------- Using continue weights ----------------")
+        state_dict = torch.load(continue_weights)
+        model.load_state_dict(state_dict)
+        return model
     else:
         print(f"---------------- No pre-trained weights ----------------")
         return model
+        
  
  
 # def vit_base_patch32_224(num_classes: int = 1000):
@@ -361,7 +367,7 @@ def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True
 #     return model
  
  
-def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True):
+def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None):
     """
     ViT-Base model (ViT-B/32) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
@@ -383,6 +389,11 @@ def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True
             raise ValueError(f'Pretrained model for vit_base_patch32_224_in21k has not yet been released')
         load_weights_except_head(model, state_dict)
         print(f"---------------- Loaded pre-trained weights ----------------")
+        return model
+    elif continue_weights!=None:
+        print(f"---------------- Using continue weights ----------------")
+        state_dict = torch.load(continue_weights)
+        model.load_state_dict(state_dict)
         return model
     else:
         print(f"---------------- No pre-trained weights ----------------")
@@ -406,7 +417,7 @@ def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True
 #     return model
  
  
-def vit_large_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True):
+def vit_large_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None):
     """
     ViT-Large model (ViT-L/16) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
@@ -429,12 +440,17 @@ def vit_large_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = Tru
         load_weights_except_head(model, state_dict)
         print(f"---------------- Loaded pre-trained weights ----------------")
         return model
+    elif continue_weights!=None:
+        print(f"---------------- Using continue weights ----------------")
+        state_dict = torch.load(continue_weights)
+        model.load_state_dict(state_dict)
+        return model
     else:
         print(f"---------------- No pre-trained weights ----------------")
         return model
  
  
-def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True):
+def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None):
     """
     ViT-Large model (ViT-L/32) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
@@ -444,8 +460,8 @@ def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = Tru
     model = VisionTransformer(img_size=224,
                               patch_size=32,
                               embed_dim=1024,
-                              depth=24,
-                              num_heads=16,
+                              depth=32, # 24
+                              num_heads=32, # 16
                               representation_size=1024 if has_logits else None,
                               num_classes=num_classes)
     if pretrained:
@@ -457,10 +473,23 @@ def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = Tru
         load_weights_except_head(model, state_dict)
         print(f"---------------- Loaded pre-trained weights ----------------")
         return model
+    elif continue_weights!=None:
+        print(f"---------------- Using continue weights ----------------")
+        state_dict = torch.load(continue_weights)
+        model.load_state_dict(state_dict)
+        return model
     else:
         print(f"---------------- No pre-trained weights ----------------")
         return model
- 
+
+
+
+
+
+
+
+
+
 """先不考慮"""
 def vit_huge_patch14_224_in21k(num_classes: int = 21843, has_logits: bool = True):
     """

@@ -7,8 +7,8 @@ from torchvision.transforms import transforms
 from functools import partial
 from collections import OrderedDict
 from typing import Optional, Callable
-from Config import config
-from GenerateDataset import data_module
+from config import config
+from generate_dataset import data_module
 import utils
 from sklearn.metrics import precision_score, recall_score
 import os
@@ -103,7 +103,7 @@ def main():
     device = config.device
     print("using {} device.".format(device))
     for model_name in config.model_list:
-        model = utils.create_model(model_name, config.num_classes).to(device)
+        model = utils.create_model(model_name, config.num_classes, continue_training=config.continue_weights).to(device)
         os.makedirs(config.save_path, exist_ok=True)
         criterion = config.training_loss
         optimizer = config.get_optimizer(model)
@@ -118,7 +118,7 @@ def main():
                         )
 
         utils.save_history_json(history, os.path.join(config.save_path, f'{model_name}_history.json'))
-        utils.plot_history(history, model_name)
+        # utils.plot_history(history, model_name)
 
 
 if __name__ == "__main__":

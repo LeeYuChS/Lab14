@@ -2,7 +2,7 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import StratifiedShuffleSplit
 from utils import set_seed
-from Config import config
+from config import config
 
 class ImageFolderDataset:
     def __init__(self, image_path, img_size=(224, 224), batch_size=32, valid_ratio=0.2, seed=42):

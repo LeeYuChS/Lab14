@@ -7,7 +7,7 @@ from datetime import datetime
 class Config():
     root_path = os.getcwd()
 
-    training_batch_size = 32
+    training_batch_size =12
     training_epoch = 64
     training_LR = 0.0001
 
@@ -20,12 +20,13 @@ class Config():
     vit_base_patch32 = "vit_base_patch32_224"
     vit_large_patch16 = "vit_large_patch16_224"    
     vit_large_patch32 = "vit_large_patch32_224"
-    model_list = [vit_base_patch16, vit_base_patch32, vit_large_patch16, vit_large_patch32]
+    model_list = [vit_large_patch32]
     # model = "vit_large_patch16_224"
     
     # model = "vit_large_patch32_224"
     # model = "vit_huge_patch14_224"
-
+    # continue_weights = r"F:\20250711_backup\Lab_forfun\Lab14-main\checkpoints\2508201040\best_vit_large_patch32_224_model.pth"
+    continue_weights = None
     dataset_type = "stroke"
     num_classes = 3
     # stroke_dataset
