@@ -26,7 +26,8 @@ class Config():
     mobilenet_v2= "mobilenet_v2"
     efficientnet = "efficientnet"
 
-    model_list = [resnet101, resnet50]
+    model_list_cnn = [resnet50, resnet101, mobilenet_v2, efficientnet]
+    model_list_transformer = [vit_base_patch16, vit_base_patch32, vit_large_patch16, vit_large_patch32]
     # model = "vit_large_patch16_224"
     
     # model = "vit_large_patch32_224"

@@ -8,15 +8,16 @@ from functools import partial
 from collections import OrderedDict
 from typing import Optional, Callable
 from config import config
-from generate_dataset import data_module
+# from generate_dataset import data_module
 import utils
 from sklearn.metrics import precision_score, recall_score
 import os
+from generate_dataset import ProgressiveImageFolderDataset
 
 # print(f"config.model: {config.model}")
 
 
-def train_and_validate(model, train_loader, valid_loader, criterion, optimizer, device, epochs, save_path="best_model.pth"):
+def train_and_validate(model, data_module, criterion, optimizer, device, epochs, save_path="best_model.pth"):
     model.to(device)
     history = {
         'train_loss': [], 'train_acc': [],
@@ -28,6 +29,11 @@ def train_and_validate(model, train_loader, valid_loader, criterion, optimizer, 
     best_precision = 0.0
 
     for epoch in range(epochs):
+        # -------- Progressive unlock --------
+        data_module.set_epoch(epoch)
+        train_loader = data_module.train_dataloader()
+        valid_loader = data_module.valid_dataloader()
+
         # -------- Train --------
         model.train()
         running_loss, correct, total = 0, 0, 0
@@ -98,26 +104,36 @@ def train_and_validate(model, train_loader, valid_loader, criterion, optimizer, 
         print(f"  Precision: {valid_precision:.4f}, Recall: {valid_recall:.4f}")
 
     return history
- 
+
 def main():
     device = config.device
     print("using {} device.".format(device))
-    for model_name in config.model_list:
+
+    for model_name in config.model_list_cnn:
+        
+        data_module = ProgressiveImageFolderDataset(
+            image_path=config.image_path,
+            img_size=(config.image_size, config.image_size),
+            batch_size=config.training_batch_size,
+            valid_ratio=0.2,
+            seed=42,
+            milestones=[10, 15, 20, 25]
+        )
+
         model = utils.create_model(model_name, config.num_classes, continue_training=config.continue_weights).to(device)
         os.makedirs(config.save_path, exist_ok=True)
         criterion = config.training_loss
         optimizer = config.get_optimizer(model)
         epochs = config.training_epoch
-        train_loader = data_module.train_dataloader()
-        valid_loader = data_module.valid_dataloader()
 
         history = train_and_validate(
-                            model, train_loader, valid_loader,
-                            criterion, optimizer, device, epochs,
-                            save_path=os.path.join(config.save_path, f"best_{model_name}_model.pth")
-                        )
+            model, data_module,  # 注意這裡直接傳 data_module
+            criterion, optimizer, device, epochs,
+            save_path=os.path.join(config.save_path, f"best_{model_name}_model.pth")
+        )
 
         utils.save_history_json(history, os.path.join(config.save_path, f'{model_name}_history.json'))
+
         # utils.plot_history(history, model_name)
 
 
