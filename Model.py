@@ -460,8 +460,8 @@ def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = Tru
     model = VisionTransformer(img_size=224,
                               patch_size=32,
                               embed_dim=1024,
-                              depth=32, # 24
-                              num_heads=32, # 16
+                              depth=32,
+                              num_heads=32,
                               representation_size=1024 if has_logits else None,
                               num_classes=num_classes)
     if pretrained:

@@ -7,8 +7,8 @@ from datetime import datetime
 class Config():
     root_path = os.getcwd()
 
-    training_batch_size =12
-    training_epoch = 64
+    training_batch_size = 32
+    training_epoch = 45
     training_LR = 0.0001
 
     @staticmethod
@@ -20,7 +20,13 @@ class Config():
     vit_base_patch32 = "vit_base_patch32_224"
     vit_large_patch16 = "vit_large_patch16_224"    
     vit_large_patch32 = "vit_large_patch32_224"
-    model_list = [vit_large_patch32]
+    
+    resnet50 = "resnet50"
+    resnet101 = "resnet101"
+    mobilenet_v2= "mobilenet_v2"
+    efficientnet = "efficientnet"
+
+    model_list = [resnet101, resnet50]
     # model = "vit_large_patch16_224"
     
     # model = "vit_large_patch32_224"

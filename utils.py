@@ -12,6 +12,10 @@ from Model import (vit_base_patch16_224_in21k,
                    vit_large_patch16_224_in21k,
                    vit_large_patch32_224_in21k,
                    vit_huge_patch14_224_in21k)
+from resnet_model import (resnet50,
+                          resnet101,
+                          mobilenet_v2,
+                          efficientnet)
 import json
 
 def set_seed(seed):
@@ -45,6 +49,15 @@ def create_model(model, num_classes, continue_training=None):
         model = vit_large_patch32_224_in21k(num_classes, has_logits=False, pretrained=False, continue_weights=continue_training)
     elif model == "vit_huge_patch14_224":
         model = vit_huge_patch14_224_in21k(num_classes, has_logits=False)
+        
+    elif model == "resnet50":
+        model = resnet50(num_classes)
+    elif model == "resnet101":
+        model = resnet101(num_classes)
+    elif model == "mobilenet_v2":
+        model = mobilenet_v2(num_classes)
+    elif model == "efficientnet":
+        model = efficientnet(num_classes)
     
     # elif model == "vit_base_patch16_224_pretrained":
     #     model == vit_base_patch16_224_in21k(num_classes, has_logits=False)
