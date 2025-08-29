@@ -1,5 +1,7 @@
 data*
-*dataset
+# *dataset
+Brain*
+lung*
 checkpoints*
 __pycache__*
 *.json
