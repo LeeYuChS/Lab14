@@ -109,7 +109,7 @@ def main():
     device = config.device
     print("using {} device.".format(device))
 
-    for model_name in config.model_list_cnn:
+    for model_name in config.model_list:
         
         data_module = ProgressiveImageFolderDataset(
             image_path=config.image_path,

@@ -44,7 +44,7 @@ def efficientnet(num_classes):
     print("="*60)
     
     model = EfficientNet.from_pretrained('efficientnet-b0')
-    model.fc = nn.Linear(model.fc.in_features, num_classes)
+    model._fc = nn.Linear(model._fc.in_features, num_classes)
 
     return model
 
