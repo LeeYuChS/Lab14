@@ -1,20 +1,10 @@
 import torch
-import torchvision.models
 from tqdm import tqdm
-from torch import nn
-from torch.utils.data import DataLoader
-from torchvision.transforms import transforms
-from functools import partial
-from collections import OrderedDict
-from typing import Optional, Callable
 from config import config
-# from generate_dataset import data_module
 import utils
 from sklearn.metrics import precision_score, recall_score
 import os
 from generate_dataset import ProgressiveImageFolderDataset
-
-# print(f"config.model: {config.model}")
 
 
 def train_and_validate(model, data_module, criterion, optimizer, device, epochs, save_path="best_model.pth"):
@@ -110,7 +100,7 @@ def main():
     print("using {} device.".format(device))
 
     for model_name in config.model_list:
-        
+        # Dynamic dataset splitting
         data_module = ProgressiveImageFolderDataset(
             image_path=config.image_path,
             img_size=(config.image_size, config.image_size),
@@ -127,14 +117,12 @@ def main():
         epochs = config.training_epoch
 
         history = train_and_validate(
-            model, data_module,  # 注意這裡直接傳 data_module
+            model, data_module,
             criterion, optimizer, device, epochs,
             save_path=os.path.join(config.save_path, f"best_{model_name}_model.pth")
         )
 
         utils.save_history_json(history, os.path.join(config.save_path, f'{model_name}_history.json'))
-
-        # utils.plot_history(history, model_name)
 
 
 if __name__ == "__main__":

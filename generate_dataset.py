@@ -30,13 +30,13 @@ class ProgressiveImageFolderDataset:
         self.classes = self.full_dataset.classes
         self.num_classes = len(self.classes)
 
-        # split train/valid (固定 validation)
+        # split train/valid
         targets = self.full_dataset.targets
         sss = StratifiedShuffleSplit(n_splits=1, test_size=self.valid_ratio, random_state=self.seed)
         train_idx, valid_idx = next(sss.split(range(len(self.full_dataset)), targets))
         self.valid_dataset = Subset(self.full_dataset, valid_idx)
 
-        # training 部分再做 progressive 分批
+        # shuffle training datasets and split it
         rng = np.random.default_rng(self.seed)
         rng.shuffle(train_idx)
         self.train_splits = np.array_split(train_idx, len(self.milestones)+1)
@@ -44,11 +44,11 @@ class ProgressiveImageFolderDataset:
         self.train_dataset = None
 
     def set_epoch(self, epoch):
-        # 初始 epoch 放第一批
+        # epoch=0, part of training dataset
         if epoch == 0 and not self.current_train_idx:
             self.current_train_idx.extend(self.train_splits[0])
 
-        # milestone 到了就多放一批
+        # putting more dataset while touch milestone epoch
         for i, m in enumerate(self.milestones):
             if epoch == m:
                 self.current_train_idx.extend(self.train_splits[i+1])

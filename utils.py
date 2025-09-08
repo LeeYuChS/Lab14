@@ -7,7 +7,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from config import config
 from torch import nn
-from Model import (vit_base_patch16_224_in21k,
+from vit_model import (vit_base_patch16_224_in21k,
                    vit_base_patch32_224_in21k,
                    vit_large_patch16_224_in21k,
                    vit_large_patch32_224_in21k,
@@ -46,7 +46,7 @@ def create_model(model, num_classes, continue_training=None):
     elif model == "vit_large_patch16_224":
         model = vit_large_patch16_224_in21k(num_classes, has_logits=False)
     elif model == "vit_large_patch32_224":
-        model = vit_large_patch32_224_in21k(num_classes, has_logits=False, pretrained=True)
+        model = vit_large_patch32_224_in21k(num_classes, has_logits=False)
     elif model == "vit_huge_patch14_224":
         model = vit_huge_patch14_224_in21k(num_classes, has_logits=False)
         
@@ -58,18 +58,6 @@ def create_model(model, num_classes, continue_training=None):
         model = mobilenet_v2(num_classes)
     elif model == "efficientnet":
         model = efficientnet(num_classes)
-    
-    # elif model == "vit_base_patch16_224_pretrained":
-    #     model == vit_base_patch16_224_in21k(num_classes, has_logits=False)
-    # elif model == "vit_base_patch32_224_pretrained":
-    #     model = vit_base_patch32_224_in21k(num_classes, has_logits=False)
-    # elif model == "vit_large_patch16_224_pretrained":
-    #     model = vit_large_patch16_224_in21k(num_classes, has_logits=False)
-    # elif model == "vit_large_patch32_224_pretrained":
-    #     model = vit_large_patch32_224_in21k(num_classes, has_logits=False)
-    # elif model == "vit_huge_patch14_224_pretrained":
-    #     model = vit_huge_patch14_224_in21k(num_classes, has_logits=False)
-
     else:
         raise Exception("Can't find any model name call {}".format(model))
 
