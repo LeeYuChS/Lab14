@@ -46,7 +46,7 @@ def create_model(model, num_classes, continue_training=None):
     elif model == "vit_large_patch16_224":
         model = vit_large_patch16_224_in21k(num_classes, has_logits=False)
     elif model == "vit_large_patch32_224":
-        model = vit_large_patch32_224_in21k(num_classes, has_logits=False, pretrained=False, continue_weights=continue_training)
+        model = vit_large_patch32_224_in21k(num_classes, has_logits=False, pretrained=True)
     elif model == "vit_huge_patch14_224":
         model = vit_huge_patch14_224_in21k(num_classes, has_logits=False)
         

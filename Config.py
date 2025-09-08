@@ -27,7 +27,7 @@ class Config():
     efficientnet = "efficientnet"
 
     # model_list_cnn = [efficientnet]
-    model_list = [vit_large_patch16, vit_large_patch32]
+    model_list = [vit_large_patch32]
     # model = "vit_large_patch16_224"
     
     # model = "vit_large_patch32_224"
