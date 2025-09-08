@@ -7,18 +7,70 @@ from functools import partial
 from collections import OrderedDict
 import torch.nn.functional as F
 
-def load_weights_except_head(model, state_dict, load_head=False):
+# def load_weights_except_head(model, state_dict, load_head=False):
+#     # head key
+#     head_keys = ['head.weight', 'head.bias']
+#     if hasattr(model, 'head_dist') and model.head_dist is not None:
+#         head_keys += ['head_dist.weight', 'head_dist.bias']
+#     if not load_head:
+#         # remove head weights
+#         for k in head_keys:
+#             if k in state_dict:
+#                 state_dict.pop(k)
+#     # load weights except classify head
+#     model.load_state_dict(state_dict, strict=False)
+def load_weights_except_head(model, state_dict, load_head=False, new_img_size=None):
+    """
+    載入預訓練權重，自動插值 pos_embed 以適應新影像大小。
+    
+    Args:
+        model: VisionTransformer 模型
+        state_dict: 預訓練權重字典
+        load_head: 是否載入分類頭 (head) 權重
+        new_img_size: 目標影像大小 (int or tuple)，若為 None，則使用 model.reference_img_size
+    """
     # head key
     head_keys = ['head.weight', 'head.bias']
     if hasattr(model, 'head_dist') and model.head_dist is not None:
         head_keys += ['head_dist.weight', 'head_dist.bias']
+    
+    # 複製 state_dict 以避免修改原始數據
+    state_dict = state_dict.copy()
+    
+    # 移除 head 權重（如果不載入）
     if not load_head:
-        # remove head weights
         for k in head_keys:
             if k in state_dict:
                 state_dict.pop(k)
-    # load weights except classify head
+    
+    # 處理 pos_embed 插值
+    if 'pos_embed' in state_dict:
+        old_pos_embed = state_dict['pos_embed']
+        old_num_patches = old_pos_embed.shape[1] - model.num_tokens  # 減去 cls_token 等
+        old_img_size = int((old_num_patches ** 0.5) * model.patch_size)  # 假設 square
+        
+        # 決定目標大小
+        target_img_size = new_img_size or model.reference_img_size
+        if isinstance(target_img_size, int):
+            target_img_size = (target_img_size, target_img_size)
+        
+        # 計算新 num_patches
+        new_num_patches = (target_img_size[0] // model.patch_size) * (target_img_size[1] // model.patch_size)
+        
+        # 如果形狀不匹配，插值
+        if old_num_patches != new_num_patches:
+            print(f"Resizing pos_embed from {old_pos_embed.shape} to match new image size {target_img_size}")
+            state_dict['pos_embed'] = resize_pos_embed(
+                old_pos_embed,
+                old_img_size=old_img_size,
+                new_img_size=target_img_size,
+                patch_size=model.patch_size,
+                num_tokens=model.num_tokens
+            )
+    
+    # 載入權重
     model.load_state_dict(state_dict, strict=False)
+
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
     """
@@ -378,35 +430,33 @@ def _init_vit_weights(m):
 #     return model
  
 from torch.hub import load_state_dict_from_url
-def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None):
+def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None, new_img_size=None):
     """
     ViT-Base model (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
-    ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-    weights ported from official Google JAX impl:
-    https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_patch16_224_in21k-e5005f0a.pth
+    ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
+    新增：new_img_size 參數，指定微調時的影像大小
     """
-    
-    model = VisionTransformer(img_size=224,
+    model = VisionTransformer(img_size=new_img_size,  # initialize new image size
                               patch_size=16,
                               embed_dim=768,
                               depth=12,
                               num_heads=12,
                               representation_size=768 if has_logits else None,
                               num_classes=num_classes)
-    if pretrained==True and continue_weights==None:
+    
+    if pretrained and continue_weights is None:
         url = "https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_patch16_224_in21k-e5005f0a.pth"
         if url:
-            state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
+            state_dict = load_state_dict_from_url(url)
         else:
-            raise ValueError(f'Pretrained model for vit_base_patch16_224_in21k has not yet been released')
-        # model.load_state_dict(state_dict, strict=False)
-        load_weights_except_head(model, state_dict)
+            raise ValueError('Pretrained model for vit_base_patch16_224_in21k has not yet been released')
         print(f"---------------- Loaded pre-trained weights ----------------")
+        load_weights_except_head(model, state_dict, load_head=False, new_img_size=new_img_size)
         return model
-    elif continue_weights!=None:
+    elif continue_weights is not None:
         print(f"---------------- Using continue weights ----------------")
         state_dict = torch.load(continue_weights)
-        model.load_state_dict(state_dict)
+        load_weights_except_head(model, state_dict, load_head=True, new_img_size=new_img_size)
         return model
     else:
         print(f"---------------- No pre-trained weights ----------------")
@@ -431,14 +481,14 @@ def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True
 #     return model
  
  
-def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None):
+def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None, new_img_size=None):
     """
     ViT-Base model (ViT-B/32) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     weights ported from official Google JAX impl:
     https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_patch32_224_in21k-8db57226.pth
     """
-    model = VisionTransformer(img_size=224,
+    model = VisionTransformer(img_size=new_img_size,
                               patch_size=32,
                               embed_dim=768,
                               depth=12,
@@ -451,13 +501,13 @@ def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True
             state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
         else:
             raise ValueError(f'Pretrained model for vit_base_patch32_224_in21k has not yet been released')
-        load_weights_except_head(model, state_dict)
         print(f"---------------- Loaded pre-trained weights ----------------")
+        load_weights_except_head(model, state_dict, load_head=False, new_img_size=new_img_size)
         return model
-    elif continue_weights!=None:
+    elif continue_weights is not None:
         print(f"---------------- Using continue weights ----------------")
         state_dict = torch.load(continue_weights)
-        model.load_state_dict(state_dict)
+        load_weights_except_head(model, state_dict, load_head=True, new_img_size=new_img_size)
         return model
     else:
         print(f"---------------- No pre-trained weights ----------------")
@@ -481,14 +531,14 @@ def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True
 #     return model
  
  
-def vit_large_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None):
+def vit_large_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None, new_img_size=None):
     """
     ViT-Large model (ViT-L/16) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     weights ported from official Google JAX impl:
     https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch16_224_in21k-606da67d.pth
     """
-    model = VisionTransformer(img_size=224,
+    model = VisionTransformer(img_size=new_img_size,
                               patch_size=16,
                               embed_dim=1024,
                               depth=24,
@@ -501,27 +551,27 @@ def vit_large_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = Tru
             state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
         else:
             raise ValueError(f'Pretrained model for vit_large_patch16_224_in21k has not yet been released')
-        load_weights_except_head(model, state_dict)
         print(f"---------------- Loaded pre-trained weights ----------------")
+        load_weights_except_head(model, state_dict, load_head=False, new_img_size=new_img_size)
         return model
-    elif continue_weights!=None:
+    elif continue_weights is not None:
         print(f"---------------- Using continue weights ----------------")
         state_dict = torch.load(continue_weights)
-        model.load_state_dict(state_dict)
+        load_weights_except_head(model, state_dict, load_head=True, new_img_size=new_img_size)
         return model
     else:
         print(f"---------------- No pre-trained weights ----------------")
         return model
  
  
-def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None):
+def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None, new_img_size=None):
     """
     ViT-Large model (ViT-L/32) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     weights ported from official Google JAX impl:
     https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch32_224_in21k-9046d2e7.pth
     """
-    model = VisionTransformer(img_size=224,
+    model = VisionTransformer(img_size=new_img_size,
                               patch_size=32,
                               embed_dim=1024,
                               depth=32,
@@ -534,18 +584,17 @@ def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = Tru
             state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
         else:
             raise ValueError(f'Pretrained model for vit_large_patch32_224_in21k has not yet been released')
-        load_weights_except_head(model, state_dict)
         print(f"---------------- Loaded pre-trained weights ----------------")
+        load_weights_except_head(model, state_dict, load_head=False, new_img_size=new_img_size)
         return model
-    elif continue_weights!=None:
+    elif continue_weights is not None:
         print(f"---------------- Using continue weights ----------------")
         state_dict = torch.load(continue_weights)
-        model.load_state_dict(state_dict)
+        load_weights_except_head(model, state_dict, load_head=True, new_img_size=new_img_size)
         return model
     else:
         print(f"---------------- No pre-trained weights ----------------")
         return model
-
 
 
 

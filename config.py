@@ -27,7 +27,7 @@ class Config():
     efficientnet = "efficientnet"
 
 
-    model_list = [vit_large_patch32]
+    model_list = [vit_base_patch16]
 
     continue_weights = None
     dataset_type = "stroke"

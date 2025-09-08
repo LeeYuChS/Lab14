@@ -37,18 +37,18 @@ def set_seed(seed):
 
 
 
-def create_model(model, num_classes, continue_training=None):
+def create_model(model, num_classes, continue_training=None, img_size=None):
     print("using {} model.".format(model))
     if model == "vit_base_patch16_224":
-        model = vit_base_patch16_224_in21k(num_classes, has_logits=False)
+        model = vit_base_patch16_224_in21k(num_classes, has_logits=False, new_img_size=config.image_size)
     elif model == "vit_base_patch32_224":
-        model = vit_base_patch32_224_in21k(num_classes, has_logits=False)
+        model = vit_base_patch32_224_in21k(num_classes, has_logits=False, new_img_size=config.image_size)
     elif model == "vit_large_patch16_224":
-        model = vit_large_patch16_224_in21k(num_classes, has_logits=False)
+        model = vit_large_patch16_224_in21k(num_classes, has_logits=False, new_img_size=config.image_size)
     elif model == "vit_large_patch32_224":
-        model = vit_large_patch32_224_in21k(num_classes, has_logits=False)
+        model = vit_large_patch32_224_in21k(num_classes, has_logits=False, new_img_size=config.image_size)
     elif model == "vit_huge_patch14_224":
-        model = vit_huge_patch14_224_in21k(num_classes, has_logits=False)
+        model = vit_huge_patch14_224_in21k(num_classes, has_logits=False, new_img_size=config.image_size)
         
     elif model == "resnet50":
         model = resnet50(num_classes)
