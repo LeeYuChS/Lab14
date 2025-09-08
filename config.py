@@ -34,8 +34,8 @@ class Config():
     num_classes = 3
     # stroke_dataset
     image_path = os.path.join(root_path, "stroke_dataset")
-    
-    image_size = 224
+
+    image_size = 384
     save_path = os.path.join(os.getcwd(), 'checkpoints', datetime.now().strftime("%y%m%d%H%M"))
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 

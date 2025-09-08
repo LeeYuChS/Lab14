@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import transforms
 from functools import partial
 from collections import OrderedDict
+import torch.nn.functional as F
 
 def load_weights_except_head(model, state_dict, load_head=False):
     # head key
@@ -60,16 +61,18 @@ class PatchEmbed(nn.Module):
         patch_size = (patch_size, patch_size)
         self.img_size = img_size
         self.patch_size = patch_size
-        self.grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
-        self.num_patches = self.grid_size[0] * self.grid_size[1]
+        
+        # calcuate at forward
+        # self.grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
+        # self.num_patches = self.grid_size[0] * self.grid_size[1]
  
         self.proj = nn.Conv2d(in_c, embed_dim, kernel_size=patch_size, stride=patch_size)
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
  
     def forward(self, x):
         B, C, H, W = x.shape
-        assert H == self.img_size[0] and W == self.img_size[1], \
-            f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        # assert H == self.img_size[0] and W == self.img_size[1], \
+        #     f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
  
         # flatten: [B, C, H, W] -> [B, C, HW]
         # transpose: [B, C, HW] -> [B, HW, C]
@@ -169,8 +172,50 @@ class Block(nn.Module):
         x = x + self.drop_path(self.attn(self.norm1(x)))
         x = x + self.drop_path(self.mlp(self.norm2(x)))
         return x
- 
- 
+    
+"""new add""" 
+
+def resize_pos_embed(pos_embed, old_img_size=224, new_img_size=None, patch_size=16, num_tokens=1):
+    """
+    interpolate positional embedding to new image size。
+    Args:
+        pos_embed: 原 pos_embed (1, old_num_patches + num_tokens, embed_dim)
+        old_img_size: 預訓練的影像大小 (int or tuple)
+        new_img_size: 新影像大小 (從輸入 x 推斷，或指定)
+        patch_size: patch 大小
+        num_tokens: cls_token 等 token 數 (1 or 2)
+    """
+    if new_img_size is None:
+        # 如果沒指定，從輸入推斷，但這裡假設在 forward 中傳入
+        pass
+    cls_tokens = pos_embed[:, :num_tokens, :]  # 保留 cls_token 和 dist_token
+    pos_embed = pos_embed[:, num_tokens:, :]   # 只插值 patch 部分
+
+    # 計算舊的 grid_size
+    old_img_size = (old_img_size, old_img_size) if isinstance(old_img_size, int) else old_img_size
+    old_grid_size = (old_img_size[0] // patch_size, old_img_size[1] // patch_size)
+    old_num_patches = old_grid_size[0] * old_grid_size[1]
+
+    assert pos_embed.shape[1] == old_num_patches, f"Pos embed shape mismatch {pos_embed.shape[1]} vs {old_num_patches}"
+
+    # 重塑為 2D 網格: (1, old_grid_h, old_grid_w, embed_dim) -> (1, embed_dim, old_grid_h, old_grid_w)
+    pos_embed = pos_embed.reshape(1, old_grid_size[0], old_grid_size[1], -1).permute(0, 3, 1, 2)
+
+    # 如果 new_img_size 是 tuple，計算新 grid；否則假設 square
+    if isinstance(new_img_size, int):
+        new_img_size = (new_img_size, new_img_size)
+    new_grid_size = (new_img_size[0] // patch_size, new_img_size[1] // patch_size)
+
+    # 雙線性插值
+    pos_embed = F.interpolate(pos_embed, size=new_grid_size, mode='bilinear', align_corners=False)
+
+    # 展平回 (1, new_num_patches, embed_dim)
+    pos_embed = pos_embed.permute(0, 2, 3, 1).reshape(1, new_grid_size[0] * new_grid_size[1], -1)
+
+    # 拼接回 tokens
+    pos_embed = torch.cat([cls_tokens, pos_embed], dim=1)
+    return pos_embed
+
 class VisionTransformer(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_c=3, num_classes=1000,
                  embed_dim=768, depth=12, num_heads=12, mlp_ratio=4.0, qkv_bias=True,
@@ -201,15 +246,20 @@ class VisionTransformer(nn.Module):
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self.num_tokens = 2 if distilled else 1
+
+        self.patch_size = patch_size  # new add: using for interpolation
+        self.reference_img_size = img_size  # 改名：這是預訓練大小
+
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
  
         self.patch_embed = embed_layer(img_size=img_size, patch_size=patch_size, in_c=in_c, embed_dim=embed_dim)
-        num_patches = self.patch_embed.num_patches
+        # num_patches = self.patch_embed.num_patches
+        reference_num_patches = (img_size // patch_size) ** 2
  
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.dist_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) if distilled else None
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + self.num_tokens, embed_dim))
+        self.pos_embed = nn.Parameter(torch.zeros(1, reference_num_patches + self.num_tokens, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_ratio)
  
         dpr = [x.item() for x in torch.linspace(0, drop_path_ratio, depth)]  # stochastic depth decay rule
@@ -248,16 +298,30 @@ class VisionTransformer(nn.Module):
         self.apply(_init_vit_weights)
  
     def forward_features(self, x):
+        B, C, H, W = x.shape
+        grid_size = (H // self.patch_size, W // self.patch_size)
+        num_patches_new = grid_size[0] * grid_size[1]
+
         # [B, C, H, W] -> [B, num_patches, embed_dim]
-        x = self.patch_embed(x)  # [B, 196, 768]
+        x = self.patch_embed(x)  # [B, num_patches_new, embed_dim]
         # [1, 1, 768] -> [B, 1, 768]
         cls_token = self.cls_token.expand(x.shape[0], -1, -1)
         if self.dist_token is None:
             x = torch.cat((cls_token, x), dim=1)  # [B, 197, 768]
         else:
             x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
- 
-        x = self.pos_drop(x + self.pos_embed)
+
+        new_pos_embed = resize_pos_embed(
+            self.pos_embed, 
+            old_img_size=self.reference_img_size, 
+            new_img_size=(H, W),  # 傳入實際輸入大小
+            patch_size=self.patch_size, 
+            num_tokens=self.num_tokens
+        )
+        # 廣播到 batch: [1, total_tokens, embed_dim] -> [B, total_tokens, embed_dim]
+        new_pos_embed = new_pos_embed.expand(B, -1, -1)
+
+        x = self.pos_drop(x + new_pos_embed)
         x = self.blocks(x)
         x = self.norm(x)
         if self.dist_token is None:
