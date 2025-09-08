@@ -21,43 +21,40 @@ import torch.nn.functional as F
 #     model.load_state_dict(state_dict, strict=False)
 def load_weights_except_head(model, state_dict, load_head=False, new_img_size=None):
     """
-    載入預訓練權重，自動插值 pos_embed 以適應新影像大小。
-    
+    loading pretrained weights, interpolating pos_embed to fit embedding size。
     Args:
-        model: VisionTransformer 模型
-        state_dict: 預訓練權重字典
-        load_head: 是否載入分類頭 (head) 權重
-        new_img_size: 目標影像大小 (int or tuple)，若為 None，則使用 model.reference_img_size
+        model: VisionTransformer
+        state_dict: pretrained weights dict
+        load_head: loading classified head weights
+        new_img_size: if None, using model.reference_img_size
     """
     # head key
     head_keys = ['head.weight', 'head.bias']
     if hasattr(model, 'head_dist') and model.head_dist is not None:
         head_keys += ['head_dist.weight', 'head_dist.bias']
-    
-    # 複製 state_dict 以避免修改原始數據
     state_dict = state_dict.copy()
     
-    # 移除 head 權重（如果不載入）
+    # remove head weights (if don't load)
     if not load_head:
         for k in head_keys:
             if k in state_dict:
                 state_dict.pop(k)
     
-    # 處理 pos_embed 插值
+    # pos_embed interpolation
     if 'pos_embed' in state_dict:
         old_pos_embed = state_dict['pos_embed']
-        old_num_patches = old_pos_embed.shape[1] - model.num_tokens  # 減去 cls_token 等
-        old_img_size = int((old_num_patches ** 0.5) * model.patch_size)  # 假設 square
+        old_num_patches = old_pos_embed.shape[1] - model.num_tokens  # H - cls_token number
+        old_img_size = int((old_num_patches ** 0.5) * model.patch_size)  # square image
         
-        # 決定目標大小
+        # target size
         target_img_size = new_img_size or model.reference_img_size
         if isinstance(target_img_size, int):
             target_img_size = (target_img_size, target_img_size)
         
-        # 計算新 num_patches
+        # new num_patches = (target_H / patch size) * (target_W / patch size)
         new_num_patches = (target_img_size[0] // model.patch_size) * (target_img_size[1] // model.patch_size)
         
-        # 如果形狀不匹配，插值
+        # shape didn't match --> interpolate
         if old_num_patches != new_num_patches:
             print(f"Resizing pos_embed from {old_pos_embed.shape} to match new image size {target_img_size}")
             state_dict['pos_embed'] = resize_pos_embed(
@@ -68,7 +65,7 @@ def load_weights_except_head(model, state_dict, load_head=False, new_img_size=No
                 num_tokens=model.num_tokens
             )
     
-    # 載入權重
+    # loading weights
     model.load_state_dict(state_dict, strict=False)
 
 
@@ -231,40 +228,38 @@ def resize_pos_embed(pos_embed, old_img_size=224, new_img_size=None, patch_size=
     """
     interpolate positional embedding to new image size。
     Args:
-        pos_embed: 原 pos_embed (1, old_num_patches + num_tokens, embed_dim)
-        old_img_size: 預訓練的影像大小 (int or tuple)
-        new_img_size: 新影像大小 (從輸入 x 推斷，或指定)
-        patch_size: patch 大小
-        num_tokens: cls_token 等 token 數 (1 or 2)
+        pos_embed: original pos_embed (1, 196 + 1, 768)
+        old_img_size: pretrained image size (224, 224)
+        new_img_size: new image size (384, 384 or you can set)
+        patch_size: patch size (16 or 32)
+        num_tokens: (224 / 14) * (224 / 14) + 1
     """
     if new_img_size is None:
-        # 如果沒指定，從輸入推斷，但這裡假設在 forward 中傳入
         pass
-    cls_tokens = pos_embed[:, :num_tokens, :]  # 保留 cls_token 和 dist_token
-    pos_embed = pos_embed[:, num_tokens:, :]   # 只插值 patch 部分
+    cls_tokens = pos_embed[:, :num_tokens, :]  # keep cls_token and dist_token
+    pos_embed = pos_embed[:, num_tokens:, :]   # interpolate parts of patch
 
-    # 計算舊的 grid_size
+    # original grid size
     old_img_size = (old_img_size, old_img_size) if isinstance(old_img_size, int) else old_img_size
     old_grid_size = (old_img_size[0] // patch_size, old_img_size[1] // patch_size)
     old_num_patches = old_grid_size[0] * old_grid_size[1]
 
     assert pos_embed.shape[1] == old_num_patches, f"Pos embed shape mismatch {pos_embed.shape[1]} vs {old_num_patches}"
 
-    # 重塑為 2D 網格: (1, old_grid_h, old_grid_w, embed_dim) -> (1, embed_dim, old_grid_h, old_grid_w)
+    # reshape 2D grid: (1, old_grid_h, old_grid_w, embed_dim) -> (1, embed_dim, old_grid_h, old_grid_w)
     pos_embed = pos_embed.reshape(1, old_grid_size[0], old_grid_size[1], -1).permute(0, 3, 1, 2)
 
-    # 如果 new_img_size 是 tuple，計算新 grid；否則假設 square
     if isinstance(new_img_size, int):
         new_img_size = (new_img_size, new_img_size)
     new_grid_size = (new_img_size[0] // patch_size, new_img_size[1] // patch_size)
 
-    # 雙線性插值
+    # bilinear interpolate
     pos_embed = F.interpolate(pos_embed, size=new_grid_size, mode='bilinear', align_corners=False)
 
-    # 展平回 (1, new_num_patches, embed_dim)
+    # flaten to (1, new_num_patches, embed_dim)
     pos_embed = pos_embed.permute(0, 2, 3, 1).reshape(1, new_grid_size[0] * new_grid_size[1], -1)
 
-    # 拼接回 tokens
+    # concat tokens
     pos_embed = torch.cat([cls_tokens, pos_embed], dim=1)
     return pos_embed
 
@@ -300,7 +295,7 @@ class VisionTransformer(nn.Module):
         self.num_tokens = 2 if distilled else 1
 
         self.patch_size = patch_size  # new add: using for interpolation
-        self.reference_img_size = img_size  # 改名：這是預訓練大小
+        self.reference_img_size = img_size  # original image size (224, 224)
 
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         act_layer = act_layer or nn.GELU
@@ -366,11 +361,11 @@ class VisionTransformer(nn.Module):
         new_pos_embed = resize_pos_embed(
             self.pos_embed, 
             old_img_size=self.reference_img_size, 
-            new_img_size=(H, W),  # 傳入實際輸入大小
+            new_img_size=(H, W),
             patch_size=self.patch_size, 
             num_tokens=self.num_tokens
         )
-        # 廣播到 batch: [1, total_tokens, embed_dim] -> [B, total_tokens, embed_dim]
+        # broadcast to batch: [1, total_tokens, embed_dim] -> [B, total_tokens, embed_dim]
         new_pos_embed = new_pos_embed.expand(B, -1, -1)
 
         x = self.pos_drop(x + new_pos_embed)
@@ -411,30 +406,13 @@ def _init_vit_weights(m):
     elif isinstance(m, nn.LayerNorm):
         nn.init.zeros_(m.bias)
         nn.init.ones_(m.weight)
- 
- 
-# def vit_base_patch16_224(num_classes: int = 1000):
-#     """
-#     ViT-Base model (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
-#     ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-#     weights ported from official Google JAX impl:
-#     链接: https://pan.baidu.com/s/1zqb08naP0RPqqfSXfkB2EA  密码: eu9f
-#     """
-#     model = VisionTransformer(img_size=224,
-#                               patch_size=16,
-#                               embed_dim=768,
-#                               depth=12,
-#                               num_heads=12,
-#                               representation_size=None,
-#                               num_classes=num_classes,)
-#     return model
+
  
 from torch.hub import load_state_dict_from_url
 def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None, new_img_size=None):
     """
     ViT-Base model (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
-    ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-    新增：new_img_size 參數，指定微調時的影像大小
+    ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
     """
     model = VisionTransformer(img_size=new_img_size,  # initialize new image size
                               patch_size=16,
@@ -460,26 +438,7 @@ def vit_base_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True
         return model
     else:
         print(f"---------------- No pre-trained weights ----------------")
-        return model
-        
- 
- 
-# def vit_base_patch32_224(num_classes: int = 1000):
-#     """
-#     ViT-Base model (ViT-B/32) from original paper (https://arxiv.org/abs/2010.11929).
-#     ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-#     weights ported from official Google JAX impl:
-#     链接: https://pan.baidu.com/s/1hCv0U8pQomwAtHBYc4hmZg  密码: s5hl
-#     """
-#     model = VisionTransformer(img_size=224,
-#                               patch_size=32,
-#                               embed_dim=768,
-#                               depth=12,
-#                               num_heads=12,
-#                               representation_size=None,
-#                               num_classes=num_classes)
-#     return model
- 
+        return model 
  
 def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None, new_img_size=None):
     """
@@ -498,7 +457,7 @@ def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True
     if pretrained:
         url = "https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_base_patch32_224_in21k-8db57226.pth"
         if url:
-            state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
+            state_dict = load_state_dict_from_url(url)
         else:
             raise ValueError(f'Pretrained model for vit_base_patch32_224_in21k has not yet been released')
         print(f"---------------- Loaded pre-trained weights ----------------")
@@ -511,25 +470,7 @@ def vit_base_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = True
         return model
     else:
         print(f"---------------- No pre-trained weights ----------------")
-        return model
- 
- 
-# def vit_large_patch16_224(num_classes: int = 1000):
-#     """
-#     ViT-Large model (ViT-L/16) from original paper (https://arxiv.org/abs/2010.11929).
-#     ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-#     weights ported from official Google JAX impl:
-#     链接: https://pan.baidu.com/s/1cxBgZJJ6qUWPSBNcE4TdRQ  密码: qqt8
-#     """
-#     model = VisionTransformer(img_size=224,
-#                               patch_size=16,
-#                               embed_dim=1024,
-#                               depth=24,
-#                               num_heads=16,
-#                               representation_size=None,
-#                               num_classes=num_classes)
-#     return model
- 
+        return model 
  
 def vit_large_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = True, pretrained: bool = True, continue_weights: str = None, new_img_size=None):
     """
@@ -548,7 +489,7 @@ def vit_large_patch16_224_in21k(num_classes: int = 21843, has_logits: bool = Tru
     if pretrained:
         url = "https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch16_224_in21k-606da67d.pth"
         if url:
-            state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
+            state_dict = load_state_dict_from_url(url)
         else:
             raise ValueError(f'Pretrained model for vit_large_patch16_224_in21k has not yet been released')
         print(f"---------------- Loaded pre-trained weights ----------------")
@@ -581,7 +522,7 @@ def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = Tru
     if pretrained:
         url = "https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-vitjx/jx_vit_large_patch32_224_in21k-9046d2e7.pth"
         if url:
-            state_dict = load_state_dict_from_url(url)  # 官方推薦新的API
+            state_dict = load_state_dict_from_url(url)
         else:
             raise ValueError(f'Pretrained model for vit_large_patch32_224_in21k has not yet been released')
         print(f"---------------- Loaded pre-trained weights ----------------")
@@ -595,78 +536,3 @@ def vit_large_patch32_224_in21k(num_classes: int = 21843, has_logits: bool = Tru
     else:
         print(f"---------------- No pre-trained weights ----------------")
         return model
-
-
-
-
-
-
-
-
-"""先不考慮"""
-def vit_huge_patch14_224_in21k(num_classes: int = 21843, has_logits: bool = True):
-    """
-    ViT-Huge model (ViT-H/14) from original paper (https://arxiv.org/abs/2010.11929).
-    ImageNet-21k weights @ 224x224, source https://github.com/google-research/vision_transformer.
-    NOTE: converted weights not currently available, too large for github release hosting.
-    """
-    model = VisionTransformer(img_size=224,
-                              patch_size=14,
-                              embed_dim=1280,
-                              depth=32,
-                              num_heads=16,
-                              representation_size=1280 if has_logits else None,
-                              num_classes=num_classes)
-    return model
-
-
-# PRETRAINED_MODELS = {
-#     'B_16': {
-#       'config': get_b16_config(),
-#       'num_classes': 21843,
-#       'image_size': (224, 224),
-#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/B_16.pth"
-#     },
-#     'B_32': {
-#       'config': get_b32_config(),
-#       'num_classes': 21843,
-#       'image_size': (224, 224),
-#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/B_32.pth"
-#     },
-#     'L_16': {
-#       'config': get_l16_config(),
-#       'num_classes': 21843,
-#       'image_size': (224, 224),
-#       'url': None
-#     },
-#     'L_32': {
-#       'config': get_l32_config(),
-#       'num_classes': 21843,
-#       'image_size': (224, 224),
-#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/L_32.pth"
-#     },
-#     'B_16_imagenet1k': {
-#       'config': drop_head_variant(get_b16_config()),
-#       'num_classes': 1000,
-#       'image_size': (384, 384),
-#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/B_16_imagenet1k.pth"
-#     },
-#     'B_32_imagenet1k': {
-#       'config': drop_head_variant(get_b32_config()),
-#       'num_classes': 1000,
-#       'image_size': (384, 384),
-#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/B_32_imagenet1k.pth"
-#     },
-#     'L_16_imagenet1k': {
-#       'config': drop_head_variant(get_l16_config()),
-#       'num_classes': 1000,
-#       'image_size': (384, 384),
-#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/L_16_imagenet1k.pth"
-#     },
-#     'L_32_imagenet1k': {
-#       'config': drop_head_variant(get_l32_config()),
-#       'num_classes': 1000,
-#       'image_size': (384, 384),
-#       'url': "https://github.com/lukemelas/PyTorch-Pretrained-ViT/releases/download/0.0.2/L_32_imagenet1k.pth"
-#     },
-# }
